@@ -3,29 +3,38 @@
 #include <limits>
 #include <type_traits>
 
-template <typename to_type, typename from_type>
-constexpr bool //
-can_represent_by(from_type v) {
+namespace can_represent_by_impl {
+template <typename to_type_, typename from_type_> //
+struct T {
+  using to_type = to_type_;
+  using from_type = from_type_;
   using from_lim = std::numeric_limits<from_type>;
   using to_lim = std::numeric_limits<to_type>;
   static_assert(from_lim::is_iec559, "from_type should be IEEE754 type");
   static_assert(from_lim::radix == 2, "radix should be 2");
   static_assert(to_lim::is_integer, "to_type should be integer");
   static_assert(to_lim::radix == 2, "radix should be 2");
-  auto diff_digits = to_lim::digits - from_lim::digits;
-  auto raw_lo = to_lim::lowest();
-  auto raw_hi = to_lim::max();
-  auto mask = 0 < diff_digits //
-                  ? ~((to_type(1) << diff_digits) - 1)
-                  : ~to_type(0);
-  // 'lo' is the smallest value of from_type that can be represented by to_type
-  auto lo = raw_lo & mask;
-  // 'hi' is the largest value of from_type that can be represented by to_type
-  auto hi = raw_hi & mask;
-  if (v < lo || hi < v) {
-    return false;
+  static constexpr int diff_digits() {
+    return to_lim::digits - from_lim::digits;
   }
-  return v == static_cast<to_type>(v);
+  static constexpr to_type raw_lo() { return to_lim::lowest(); }
+  static constexpr to_type raw_hi() { return to_lim::max(); }
+  static constexpr to_type mask() {
+    return 0 < diff_digits() //
+               ? ~((to_type(1) << diff_digits()) - 1)
+               : ~to_type(0);
+  }
+  static constexpr to_type lo() { return raw_lo() & mask(); }
+  static constexpr to_type hi() { return raw_hi() & mask(); }
+};
+
+} // namespace can_represent_by_impl
+
+template <typename to_type, typename from_type>
+constexpr bool //
+can_represent_by(from_type v) {
+  using t = can_represent_by_impl::T<to_type, from_type>;
+  return t::lo() <= v && v <= t::hi() && v == static_cast<to_type>(v);
 }
 
 #include <cmath>
